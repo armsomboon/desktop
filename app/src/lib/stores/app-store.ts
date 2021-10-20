@@ -285,6 +285,7 @@ import { DragAndDropIntroType } from '../../ui/history/drag-and-drop-intro'
 import { UseWindowsOpenSSHKey } from '../ssh/ssh'
 import { isConflictsFlow } from '../multi-commit-operation'
 import { NotificationsStore } from './notifications-store'
+import { IRefCheck } from '../ci-checks/ci-checks'
 
 const LastSelectedRepositoryIDKey = 'last-selected-repository-id'
 
@@ -6754,7 +6755,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
   private onChecksFailedNotification = async (
     repository: RepositoryWithGitHubRepository,
-    pullRequest: PullRequest
+    pullRequest: PullRequest,
+    checks: ReadonlyArray<IRefCheck>
   ) => {
     const selectedRepository =
       this.selectedRepository ?? (await this._selectRepository(repository))
@@ -6768,6 +6770,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
         pullRequest,
         repository,
         needsSelectRepository: true,
+        checks,
       })
     }
 
@@ -6788,6 +6791,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
         pullRequest,
         repository,
         needsSelectRepository: false,
+        checks,
       })
     }
   }

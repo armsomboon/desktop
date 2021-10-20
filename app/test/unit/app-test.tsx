@@ -75,7 +75,7 @@ describe('App', () => {
     const commitStatusStore = new CommitStatusStore(accountsStore)
     aheadBehindStore = new AheadBehindStore()
 
-    const notificationsStore = new NotificationsStore()
+    const notificationsStore = new NotificationsStore(accountsStore)
 
     appStore = new AppStore(
       githubUserStore,

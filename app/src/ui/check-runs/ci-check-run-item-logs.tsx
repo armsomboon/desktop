@@ -1,10 +1,4 @@
 import * as React from 'react'
-import {
-  getCheckDurationInSeconds,
-  IRefCheck,
-  IRefCheckOutput,
-  RefCheckOutputType,
-} from '../../lib/stores/commit-status-store'
 
 import { Octicon } from '../octicons'
 import classNames from 'classnames'
@@ -12,6 +6,12 @@ import { APICheckConclusion } from '../../lib/api'
 import { Button } from '../lib/button'
 import { encodePathAsUrl } from '../../lib/path'
 import { getClassNameForCheck, getSymbolForCheck } from '../branches/ci-status'
+import {
+  IRefCheck,
+  IRefCheckOutput,
+  RefCheckOutputType,
+  getCheckDurationInSeconds,
+} from '../../lib/ci-checks/ci-checks'
 
 // TODO: Get empty graphic for logs?
 const BlankSlateImage = encodePathAsUrl(

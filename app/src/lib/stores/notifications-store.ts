@@ -5,17 +5,31 @@ import {
 } from '../../models/repository'
 import { remote } from 'electron'
 import { PullRequest, PullRequestRef } from '../../models/pull-request'
+import { API } from '../api'
+import {
+  createCombinedCheckFromChecks,
+  getLatestCheckRunsByName,
+  apiStatusToRefCheck,
+  apiCheckRunToRefCheck,
+  IRefCheck,
+} from '../ci-checks/ci-checks'
+import { AccountsStore } from './accounts-store'
 
 type OnChecksFailedCallback = (
   repository: RepositoryWithGitHubRepository,
-  pullRequest: PullRequest
-  // TODO: workflow run too?
+  pullRequest: PullRequest,
+  checkRuns: ReadonlyArray<IRefCheck>
 ) => void
 
 export class NotificationsStore {
   private fakePollingTimeoutId: number | null = null
   private repository: RepositoryWithGitHubRepository | null = null
   private onChecksFailedCallback: OnChecksFailedCallback | null = null
+  private accountsStore: AccountsStore
+
+  public constructor(accountsStore: AccountsStore) {
+    this.accountsStore = accountsStore
+  }
 
   private unsubscribe() {
     if (this.fakePollingTimeoutId !== null) {
@@ -45,7 +59,7 @@ export class NotificationsStore {
     this.subscribe(repository)
   }
 
-  private postChecksFailedNotification() {
+  private async postChecksFailedNotification() {
     if (this.repository === null) {
       return
     }
@@ -86,8 +100,50 @@ export class NotificationsStore {
       false
     )
 
+    const { gitHubRepository } = repository
+    const { owner, name, endpoint } = gitHubRepository
+
+    // TODO: make this in a cleaner way
+    const accounts = await this.accountsStore.getAll()
+    const account = accounts.find(a => a.endpoint === endpoint)
+
+    if (account === undefined) {
+      return
+    }
+
+    const ref = pullRequest.head.ref
+    const api = API.fromAccount(account)
+
+    const [statuses, checkRuns] = await Promise.all([
+      api.fetchCombinedRefStatus(owner.login, name, ref),
+      api.fetchRefCheckRuns(owner.login, name, ref),
+    ])
+
+    const checks = new Array<IRefCheck>()
+
+    if (statuses === null && checkRuns === null) {
+      return
+    }
+
+    if (statuses !== null) {
+      checks.push(...statuses.statuses.map(apiStatusToRefCheck))
+    }
+
+    if (checkRuns !== null) {
+      const latestCheckRunsByName = getLatestCheckRunsByName(
+        checkRuns.check_runs
+      )
+      checks.push(...latestCheckRunsByName.map(apiCheckRunToRefCheck))
+    }
+
+    const check = createCombinedCheckFromChecks(checks)
+
+    if (check === null || check.checks.length === 0) {
+      return
+    }
+
     notification.on('click', () => {
-      this.onChecksFailedCallback?.(repository, pullRequest)
+      this.onChecksFailedCallback?.(repository, pullRequest, check.checks)
     })
 
     notification.show()

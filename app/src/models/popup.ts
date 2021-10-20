@@ -18,6 +18,7 @@ import { ITextDiff, DiffSelection } from './diff'
 import { RepositorySettingsTab } from '../ui/repository-settings/repository-settings'
 import { ICommitMessage } from './commit-message'
 import { IAuthor } from './author'
+import { IRefCheck } from '../lib/ci-checks/ci-checks'
 
 export enum PopupType {
   RenameBranch = 1,
@@ -315,4 +316,5 @@ export type Popup =
       repository: RepositoryWithGitHubRepository
       pullRequest: PullRequest
       needsSelectRepository: boolean
+      checks: ReadonlyArray<IRefCheck>
     }

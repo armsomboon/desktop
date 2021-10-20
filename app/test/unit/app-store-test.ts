@@ -79,7 +79,7 @@ describe('AppStore', () => {
 
     const apiRepositoriesStore = new ApiRepositoriesStore(accountsStore)
 
-    const notificationsStore = new NotificationsStore()
+    const notificationsStore = new NotificationsStore(accountsStore)
 
     const appStore = new AppStore(
       githubUserStore,

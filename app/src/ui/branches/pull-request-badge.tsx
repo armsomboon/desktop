@@ -2,8 +2,8 @@ import * as React from 'react'
 import { CIStatus } from './ci-status'
 import { GitHubRepository } from '../../models/github-repository'
 import { Dispatcher } from '../dispatcher'
-import { ICombinedRefCheck } from '../../lib/stores/commit-status-store'
 import { enableCICheckRuns } from '../../lib/feature-flag'
+import { ICombinedRefCheck } from '../../lib/ci-checks/ci-checks'
 
 interface IPullRequestBadgeProps {
   /** The pull request's number. */

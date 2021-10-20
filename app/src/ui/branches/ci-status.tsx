@@ -5,12 +5,12 @@ import classNames from 'classnames'
 import { GitHubRepository } from '../../models/github-repository'
 import { IDisposable } from 'event-kit'
 import { Dispatcher } from '../dispatcher'
+import { IAPIWorkflowJobStep } from '../../lib/api'
 import {
   ICombinedRefCheck,
   IRefCheck,
   isSuccess,
-} from '../../lib/stores/commit-status-store'
-import { IAPIWorkflowJobStep } from '../../lib/api'
+} from '../../lib/ci-checks/ci-checks'
 
 interface ICIStatusProps {
   /** The classname for the underlying element. */

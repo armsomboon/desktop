@@ -2,15 +2,15 @@ import * as React from 'react'
 import { GitHubRepository } from '../../models/github-repository'
 import { IDisposable } from 'event-kit'
 import { Dispatcher } from '../dispatcher'
-import {
-  getCheckRunConclusionAdjective,
-  ICombinedRefCheck,
-  IRefCheck,
-} from '../../lib/stores/commit-status-store'
 import { Octicon, syncClockwise } from '../octicons'
 import { Button } from '../lib/button'
 import { Popover, PopoverCaretPosition } from '../lib/popover'
 import { CICheckRunList } from './ci-check-run-list'
+import {
+  ICombinedRefCheck,
+  IRefCheck,
+  getCheckRunConclusionAdjective,
+} from '../../lib/ci-checks/ci-checks'
 
 interface ICICheckRunPopoverProps {
   readonly dispatcher: Dispatcher

@@ -5,19 +5,23 @@ import { OkCancelButtonGroup } from '../dialog/ok-cancel-button-group'
 import { RepositoryWithGitHubRepository } from '../../models/repository'
 import { PullRequest } from '../../models/pull-request'
 import { Dispatcher } from '../dispatcher'
-// import { CICheckRunDialog } from './ci-check-run-dialog'
+import { CICheckRunList } from '../check-runs/ci-check-run-list'
+import { IRefCheck } from '../../lib/ci-checks/ci-checks'
+import { CICheckRunLogs } from '../check-runs/ci-check-run-item-logs'
 
 interface IPullRequestChecksFailedProps {
   readonly dispatcher: Dispatcher
   readonly shouldChangeRepository: boolean
   readonly repository: RepositoryWithGitHubRepository
   readonly pullRequest: PullRequest
+  readonly checks: ReadonlyArray<IRefCheck>
   readonly onSubmit: () => void
   readonly onDismissed: () => void
 }
 
 interface IPullRequestChecksFailedState {
   readonly loading: boolean
+  readonly selectedCheck: IRefCheck
 }
 
 /**
@@ -29,7 +33,12 @@ export class PullRequestChecksFailed extends React.Component<
 > {
   public constructor(props: IPullRequestChecksFailedProps) {
     super(props)
-    this.state = { loading: false }
+
+    const { checks } = this.props
+
+    const selectedCheck =
+      checks.find(check => check.conclusion === 'failure') ?? checks[0]
+    this.state = { loading: false, selectedCheck }
   }
 
   public render() {
@@ -69,6 +78,27 @@ export class PullRequestChecksFailed extends React.Component<
               </span>
             </span>
           </Row>
+          <Row>
+            <div className={'ci-check-run-dialog-container'}>
+              <CICheckRunList
+                checkRuns={this.props.checks}
+                loadingActionLogs={false}
+                loadingActionWorkflows={false}
+                showLogsInline={false}
+                selectable={true}
+                onViewOnGitHub={this.onViewOnGitHub}
+                onCheckRunClick={this.onCheckRunClick}
+              />
+              {this.state.selectedCheck && (
+                <CICheckRunLogs
+                  checkRun={this.state.selectedCheck}
+                  loadingActionLogs={false}
+                  loadingActionWorkflows={false}
+                  onViewOnGitHub={this.onViewOnGitHub}
+                />
+              )}
+            </div>
+          </Row>
         </DialogContent>
         <DialogFooter>
           <OkCancelButtonGroup
@@ -80,6 +110,27 @@ export class PullRequestChecksFailed extends React.Component<
         </DialogFooter>
       </Dialog>
     )
+  }
+
+  private onCheckRunClick = (checkRun: IRefCheck): void => {
+    this.setState({ selectedCheck: checkRun })
+  }
+
+  private onViewOnGitHub = (checkRun: IRefCheck) => {
+    const { repository, pullRequest, dispatcher } = this.props
+
+    // Some checks do not provide htmlURLS like ones for the legacy status
+    // object as they do not have a view in the checks screen. In that case we
+    // will just open the PR and they can navigate from there... a little
+    // dissatisfying tho more of an edgecase anyways.
+    const url =
+      checkRun.htmlUrl ??
+      `${repository.gitHubRepository.htmlURL}/pull/${pullRequest.pullRequestNumber}`
+    if (url === null) {
+      // The repository should have a htmlURL.
+      return
+    }
+    dispatcher.openInBrowser(url)
   }
 
   private onSubmit = async (event: React.MouseEvent<HTMLButtonElement>) => {

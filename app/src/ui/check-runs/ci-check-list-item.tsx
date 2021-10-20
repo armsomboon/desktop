@@ -1,9 +1,9 @@
 import * as React from 'react'
-import { IRefCheck } from '../../lib/stores/commit-status-store'
 import { Octicon } from '../octicons'
 import { getClassNameForCheck, getSymbolForCheck } from '../branches/ci-status'
 import classNames from 'classnames'
 import { CICheckRunLogs } from './ci-check-run-item-logs'
+import { IRefCheck } from '../../lib/ci-checks/ci-checks'
 
 interface ICICheckRunListItemProps {
   /** The check run to display **/
@@ -17,6 +17,8 @@ interface ICICheckRunListItemProps {
 
   /** Whether to show the logs for this check run */
   readonly showLogs: boolean
+
+  readonly selected: boolean
 
   /** Callback for when a check run is clicked */
   readonly onCheckRunClick: (checkRun: IRefCheck) => void
@@ -43,7 +45,10 @@ export class CICheckRunListItem extends React.PureComponent<
     return (
       <>
         <div
-          className="ci-check-list-item list-item"
+          className={classNames('ci-check-list-item list-item', {
+            selected: this.props.selected,
+          })}
+          tabIndex={0}
           onClick={this.onCheckRunClick}
         >
           <div className="ci-check-status-symbol">
