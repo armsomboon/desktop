@@ -4,24 +4,18 @@ import QuickLRU from 'quick-lru'
 import { Account } from '../../models/account'
 import { AccountsStore } from './accounts-store'
 import { GitHubRepository } from '../../models/github-repository'
-import {
-  API,
-  IAPIWorkflowRun,
-  IAPIWorkflowJobs,
-  getAccountForEndpoint,
-} from '../api'
+import { API, getAccountForEndpoint } from '../api'
 import { IDisposable, Disposable } from 'event-kit'
 import { setAlmostImmediate } from '../set-almost-immediate'
-import JSZip from 'jszip'
 import {
   ICombinedRefCheck,
   IRefCheck,
-  RefCheckOutputType,
-  parseJobStepLogs,
   createCombinedCheckFromChecks,
   apiCheckRunToRefCheck,
   getLatestCheckRunsByName,
   apiStatusToRefCheck,
+  getLatestPRWorkflowRunsLogsForCheckRun,
+  getCheckRunActionsJobsAndLogURLS,
 } from '../ci-checks/ci-checks'
 
 interface ICommitStatusCacheEntry {
@@ -387,50 +381,13 @@ export class CommitStatusStore {
     }
 
     const api = API.fromAccount(account)
-    const latestWorkflowRuns = await this.getLatestPRWorkflowRuns(
+    return getCheckRunActionsJobsAndLogURLS(
       api,
       owner,
       name,
-      branchName
+      branchName,
+      checkRuns
     )
-
-    if (latestWorkflowRuns.length === 0) {
-      return checkRuns
-    }
-
-    return this.getCheckRunWithActionsJobAndLogURLs(
-      checkRuns,
-      latestWorkflowRuns
-    )
-  }
-
-  private getCheckRunWithActionsJobAndLogURLs(
-    checkRuns: ReadonlyArray<IRefCheck>,
-    actionWorkflowRuns: ReadonlyArray<IAPIWorkflowRun>
-  ): ReadonlyArray<IRefCheck> {
-    if (actionWorkflowRuns.length === 0 || checkRuns.length === 0) {
-      return checkRuns
-    }
-
-    const mappedCheckRuns = new Array<IRefCheck>()
-    for (const cr of checkRuns) {
-      const matchingWR = actionWorkflowRuns.find(
-        wr => wr.check_suite_id === cr.checkSuiteId
-      )
-      if (matchingWR === undefined) {
-        mappedCheckRuns.push(cr)
-        continue
-      }
-
-      const { id, logs_url } = matchingWR
-      mappedCheckRuns.push({
-        ...cr,
-        actionsWorkflowRunId: id,
-        logs_url,
-      })
-    }
-
-    return mappedCheckRuns
   }
 
   /**
@@ -456,92 +413,7 @@ export class CommitStatusStore {
 
     const api = API.fromAccount(account)
 
-    const logCache = new Map<string, JSZip>()
-    const jobsCache = new Map<number, IAPIWorkflowJobs | null>()
-    const mappedCheckRuns = new Array<IRefCheck>()
-    for (const cr of checkRuns) {
-      if (cr.actionsWorkflowRunId === undefined || cr.logs_url === undefined) {
-        mappedCheckRuns.push(cr)
-        continue
-      }
-
-      // Multiple check runs match a single workflow run.
-      // We can prevent several job network calls by caching them.
-      const workFlowRunJobs =
-        jobsCache.get(cr.actionsWorkflowRunId) ??
-        (await api.fetchWorkflowRunJobs(owner, name, cr.actionsWorkflowRunId))
-      jobsCache.set(cr.actionsWorkflowRunId, workFlowRunJobs)
-
-      // Here check run and jobs only share their names.
-      // Thus, unfortunately cannot match on a numerical id.
-      const matchingJob = workFlowRunJobs?.jobs.find(j => j.name === cr.name)
-      if (matchingJob === undefined) {
-        mappedCheckRuns.push(cr)
-        continue
-      }
-
-      // One workflow can have the logs for multiple check runs.. no need to
-      // keep retrieving it. So we are hashing it.
-      const logZip =
-        logCache.get(cr.logs_url) ??
-        (await api.fetchWorkflowRunJobLogs(cr.logs_url))
-      if (logZip === null) {
-        mappedCheckRuns.push(cr)
-        continue
-      }
-
-      logCache.set(cr.logs_url, logZip)
-
-      mappedCheckRuns.push({
-        ...cr,
-        htmlUrl: matchingJob.html_url,
-        output: {
-          ...cr.output,
-          type: RefCheckOutputType.Actions,
-          steps: await parseJobStepLogs(logZip, matchingJob),
-        },
-      })
-    }
-
-    return mappedCheckRuns
-  }
-
-  // Gets only the latest PR workflow runs hashed by name
-  private async getLatestPRWorkflowRuns(
-    api: API,
-    owner: string,
-    name: string,
-    branchName: string
-  ): Promise<ReadonlyArray<IAPIWorkflowRun>> {
-    const wrMap = new Map<number, IAPIWorkflowRun>()
-    const allBranchWorkflowRuns = await api.fetchPRWorkflowRuns(
-      owner,
-      name,
-      branchName
-    )
-
-    if (allBranchWorkflowRuns === null) {
-      return []
-    }
-
-    // When retrieving Actions Workflow runs it returns all present and past
-    // workflow runs for the given branch name. For each workflow name, we only
-    // care about showing the latest run.
-    for (const wr of allBranchWorkflowRuns.workflow_runs) {
-      const storedWR = wrMap.get(wr.workflow_id)
-      if (storedWR === undefined) {
-        wrMap.set(wr.workflow_id, wr)
-        continue
-      }
-
-      const storedWRDate = new Date(storedWR.created_at)
-      const givenWRDate = new Date(wr.created_at)
-      if (storedWRDate.getTime() < givenWRDate.getTime()) {
-        wrMap.set(wr.workflow_id, wr)
-      }
-    }
-
-    return Array.from(wrMap.values())
+    return getLatestPRWorkflowRunsLogsForCheckRun(api, owner, name, checkRuns)
   }
 
   public async rerequestCheckSuite(

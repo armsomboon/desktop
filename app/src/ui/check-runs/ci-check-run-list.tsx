@@ -21,6 +21,8 @@ interface ICICheckRunListProps {
 
   readonly selectable?: boolean
 
+  readonly selectedCheckRun?: IRefCheck | null
+
   /** Callback to opens check runs on GitHub */
   readonly onViewOnGitHub: (checkRun: IRefCheck) => void
 
@@ -43,8 +45,8 @@ export class CICheckRunList extends React.PureComponent<
     super(props)
 
     this.state = {
-      selectedCheckRun: null,
-      checkRunsShown: null,
+      selectedCheckRun: props.selectedCheckRun ?? null,
+      checkRunsShown: props.selectedCheckRun?.appName ?? null,
       checkRunLogsShown: null,
     }
   }

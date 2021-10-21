@@ -6,12 +6,19 @@ import { RepositoryWithGitHubRepository } from '../../models/repository'
 import { PullRequest } from '../../models/pull-request'
 import { Dispatcher } from '../dispatcher'
 import { CICheckRunList } from '../check-runs/ci-check-run-list'
-import { IRefCheck } from '../../lib/ci-checks/ci-checks'
+import {
+  IRefCheck,
+  getLatestPRWorkflowRunsLogsForCheckRun,
+  getCheckRunActionsJobsAndLogURLS,
+} from '../../lib/ci-checks/ci-checks'
 import { CICheckRunLogs } from '../check-runs/ci-check-run-item-logs'
+import { Account } from '../../models/account'
+import { API } from '../../lib/api'
 
 interface IPullRequestChecksFailedProps {
   readonly dispatcher: Dispatcher
   readonly shouldChangeRepository: boolean
+  readonly accounts: ReadonlyArray<Account>
   readonly repository: RepositoryWithGitHubRepository
   readonly pullRequest: PullRequest
   readonly checks: ReadonlyArray<IRefCheck>
@@ -21,7 +28,10 @@ interface IPullRequestChecksFailedProps {
 
 interface IPullRequestChecksFailedState {
   readonly loading: boolean
-  readonly selectedCheck: IRefCheck
+  readonly selectedCheckID: number
+  readonly checks: ReadonlyArray<IRefCheck>
+  readonly loadingActionWorkflows: boolean
+  readonly loadingActionLogs: boolean
 }
 
 /**
@@ -38,7 +48,13 @@ export class PullRequestChecksFailed extends React.Component<
 
     const selectedCheck =
       checks.find(check => check.conclusion === 'failure') ?? checks[0]
-    this.state = { loading: false, selectedCheck }
+    this.state = {
+      loading: false,
+      selectedCheckID: selectedCheck.id,
+      checks,
+      loadingActionWorkflows: true,
+      loadingActionLogs: true,
+    }
   }
 
   public render() {
@@ -55,6 +71,10 @@ export class PullRequestChecksFailed extends React.Component<
     const dialogTitle = __DARWIN__
       ? 'Pull Request Checks Failed'
       : 'Pull request checks failed'
+
+    const selectedCheck = this.state.checks.find(
+      check => check.id === this.state.selectedCheckID
+    )
 
     return (
       <Dialog
@@ -81,19 +101,20 @@ export class PullRequestChecksFailed extends React.Component<
           <Row>
             <div className={'ci-check-run-dialog-container'}>
               <CICheckRunList
-                checkRuns={this.props.checks}
-                loadingActionLogs={false}
-                loadingActionWorkflows={false}
+                checkRuns={this.state.checks}
+                loadingActionLogs={this.state.loadingActionLogs}
+                loadingActionWorkflows={this.state.loadingActionWorkflows}
                 showLogsInline={false}
                 selectable={true}
+                selectedCheckRun={selectedCheck}
                 onViewOnGitHub={this.onViewOnGitHub}
                 onCheckRunClick={this.onCheckRunClick}
               />
-              {this.state.selectedCheck && (
+              {selectedCheck !== undefined && (
                 <CICheckRunLogs
-                  checkRun={this.state.selectedCheck}
-                  loadingActionLogs={false}
-                  loadingActionWorkflows={false}
+                  checkRun={selectedCheck}
+                  loadingActionLogs={this.state.loadingActionLogs}
+                  loadingActionWorkflows={this.state.loadingActionWorkflows}
                   onViewOnGitHub={this.onViewOnGitHub}
                 />
               )}
@@ -112,8 +133,75 @@ export class PullRequestChecksFailed extends React.Component<
     )
   }
 
+  public componentDidMount() {
+    this.loadCheckRunLogs()
+  }
+
+  private async loadCheckRunLogs() {
+    const { gitHubRepository } = this.props.repository
+    const { pullRequest } = this.props
+
+    const account = this.props.accounts.find(
+      a => a.endpoint === gitHubRepository.endpoint
+    )
+
+    if (account === undefined) {
+      this.setState({
+        loadingActionWorkflows: false,
+        loadingActionLogs: false,
+      })
+      return
+    }
+
+    const api = API.fromAccount(account)
+
+    /*
+      Until we retrieve the actions workflows, we don't know if a check run has
+      action logs to output, thus, we want to show loading until then. However,
+      once the workflows have been retrieved and since the logs retrieval and
+      parsing can be noticeably time consuming. We go ahead and flip a flag so
+      that we know we can go ahead and display the checkrun `output` content if
+      a check run does not have action logs to retrieve/parse.
+    */
+    const checkRunsWithActionsUrls = await getCheckRunActionsJobsAndLogURLS(
+      api,
+      gitHubRepository.owner.login,
+      gitHubRepository.name,
+      pullRequest.head.ref,
+      this.props.checks
+    )
+
+    // When the component unmounts, this is set to null. This check will help us
+    // prevent using set state on an unmounted component it it is unmounted
+    // before above api returns.
+    // if (this.statusSubscription === null) {
+    //   return
+    // }
+
+    this.setState({
+      checks: checkRunsWithActionsUrls,
+      loadingActionWorkflows: false,
+    })
+
+    const checks = await getLatestPRWorkflowRunsLogsForCheckRun(
+      api,
+      gitHubRepository.owner.login,
+      gitHubRepository.name,
+      checkRunsWithActionsUrls
+    )
+
+    // When the component unmounts, this is set to null. This check will help us
+    // prevent using set state on an unmounted component it it is unmounted
+    // before above api returns.
+    // if (this.statusSubscription === null) {
+    //   return
+    // }
+
+    this.setState({ checks, loadingActionLogs: false })
+  }
+
   private onCheckRunClick = (checkRun: IRefCheck): void => {
-    this.setState({ selectedCheck: checkRun })
+    this.setState({ selectedCheckID: checkRun.id })
   }
 
   private onViewOnGitHub = (checkRun: IRefCheck) => {

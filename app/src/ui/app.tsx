@@ -2060,6 +2060,7 @@ export class App extends React.Component<IAppProps, IAppState> {
             repository={popup.repository}
             pullRequest={popup.pullRequest}
             checks={popup.checks}
+            accounts={this.state.accounts}
             onSubmit={onPopupDismissedFn}
             onDismissed={onPopupDismissedFn}
           />
